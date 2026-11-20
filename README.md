@@ -1,39 +1,54 @@
-# Detector de Path Traversal em Go
+<p align="center"><img src="assets/banner.svg" alt="go-traversal-detector — análise estática de path traversal em código Go" width="100%"></p>
 
-Análise estática que localiza usos de `filepath.Join`, `os.Open` e afins que recebem caminho de origem não confiável — e verifica se a **mesma função** tem uma barreira de contenção (`strings.HasPrefix`, `filepath.Rel`, `os.Root`, `SecureJoin`, ou um helper interno como `doSafeMakeDir`).
+# go-traversal-detector — análise estática de path traversal (CWE-22) em Go
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-green)
+Ferramenta de **análise estática** em **Python** que encontra usos de `filepath.Join`, `os.Open` e funções semelhantes que recebem **caminho de origem não confiável** em código **Go**, e verifica se a **mesma função** tem uma **barreira de contenção** antes de apontar o candidato. Reconhece `strings.HasPrefix`, `filepath.Rel`, `os.Root`, `SecureJoin` e helpers internos como `doSafeMakeDir`.
 
-> **O que esta ferramenta NÃO faz:** não executa código, não prova exploração, não gera PoC. Ela aponta *candidatos a revisão manual*. Um achado é um ponto para você ir ler o código — nunca uma vulnerabilidade confirmada. Essa restrição é intencional e é o que torna a ferramenta confiável.
+> A ferramenta **não executa código, não prova exploração e não gera PoC**. Ela aponta **candidatos à revisão manual**; um achado é um lugar para ler o código, nunca uma vulnerabilidade confirmada.
 
-## Por que ela existe
+## Recursos
 
-Path traversal em Go quase sempre depende de uma coisa: o caminho montado com `filepath.Join` é contido dentro de um diretório base, ou não? A checagem costuma estar logo ao lado — mas às vezes numa função auxiliar. Um scanner ingênuo que só procura `filepath.Join` gera falso positivo em todo projeto. Este verifica a contenção antes de gritar.
+- **Busca de *sinks*** de sistema de arquivos com entrada suspeita.
+- **Verificação de contenção** na própria função, inclusive quando a checagem é delegada a um helper conhecido.
+- **Classificação**:
+  - **revisar**: o *sink* recebe entrada suspeita e não há barreira visível na função;
+  - **provavelmente-seguro**: existe uma barreira; ainda vale conferir se ela cobre aquele caminho.
+- **Autoteste** embutido (`--test`).
+- Sem dependências externas.
 
-## Uso
+## Instalação
+
+Requisitos: **Python 3.10+**.
 
 ```bash
-python3 gotraversal.py ./projeto-go
-python3 gotraversal.py arquivo.go
-python3 gotraversal.py --test
+git clone https://github.com/ticarollamas-arch/go-traversal-detector.git
+cd go-traversal-detector
 ```
 
-## Como classifica
+## Como usar
 
-- **revisar** — o sink recebe entrada suspeita e **nenhuma barreira** aparece na função. Vá ler o código e as funções que ela chama.
-- **provavelmente-seguro** — há uma barreira de contenção na função. Ainda vale conferir se ela cobre o caminho específico.
+```bash
+python3 gotraversal.py ./projeto-go     # analisa um diretório
+python3 gotraversal.py arquivo.go       # analisa um arquivo
+python3 gotraversal.py --test           # roda o autoteste
+```
 
-## O caso que ensina
+## Por que verificar a contenção
 
-Rodado contra o `SafeMakeDir` do Kubernetes (`pkg/volume/util/subpath/subpath_linux.go`), o detector marca a função como **provavelmente-seguro** — porque ela delega para `doSafeMakeDir`, que contém a checagem de contenção. Um scanner que só olhasse a linha do `filepath.Join` concluiria "vulnerável" e geraria um report que seria fechado como não-aplicável. A diferença entre as duas ferramentas é a diferença entre um report aceito e um rejeitado.
+Path traversal em Go costuma depender de uma pergunta: o caminho montado com `filepath.Join` fica contido no diretório base? A checagem muitas vezes está logo ao lado ou numa função auxiliar. Um scanner que só procura `filepath.Join` gera falso positivo em quase todo projeto.
+
+**Exemplo real**: no `SafeMakeDir` do Kubernetes (`pkg/volume/util/subpath/subpath_linux.go`), o detector classifica a função como **provavelmente-seguro**, porque ela delega a `doSafeMakeDir`, que contém a checagem. Uma ferramenta ingênua marcaria "vulnerável", e o report seria fechado como não aplicável.
 
 ## Limitações
 
-- Análise por função, dentro de um arquivo — não segue a barreira se ela estiver em outro arquivo/pacote.
-- Reconhece um conjunto conhecido de barreiras; padrões incomuns de sanitização podem gerar "revisar" indevido.
+- A análise é por função, dentro de um arquivo: não segue barreiras em outros arquivos ou pacotes.
+- Reconhece um conjunto conhecido de barreiras; sanitizações incomuns podem gerar "revisar" indevido.
 - É ponto de partida para leitura humana, não veredito.
+
+## Tecnologias
+
+Python 3 · análise estática · Go · CWE-22 (Path Traversal)
 
 ## Licença
 
-MIT
+Distribuído sob a licença MIT. Veja [LICENSE](LICENSE).
